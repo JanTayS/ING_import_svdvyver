@@ -4,10 +4,25 @@ import pandas as pd
 import shutil
 from sqlalchemy import create_engine
 
+
+def create_folder_if_not_exist(folder_path):
+    if not os.path.exists(folder_path):
+        os.makedirs(folder_path)
+
+
 # Directory containing the CSV files
 todo_folder = os.path.join(os.getcwd(), "todo")
 done_folder = os.path.join(os.getcwd(), "done")
-print(todo_folder)
+
+# Create folders if they don't exist
+create_folder_if_not_exist(todo_folder)
+create_folder_if_not_exist(done_folder)
+
+# Check if 'todo' folder is empty
+if not os.listdir(todo_folder):
+    print("No CSV files found in the 'todo' folder.")
+    print("Please place the CSV files you want to process in the 'todo' folder and run the script again.")
+    exit()
 
 # Database connection parameters
 server = '196.147.195.12'  # e.g., 'localhost\sqlexpress'
@@ -63,4 +78,4 @@ for csv_file in csv_files:
     final_df.to_sql(table_name, con=engine, if_exists='append', index=False)
 
     # Move the processed CSV file to the 'done' folder
-    # shutil.move(file_path, os.path.join(done_folder, csv_file))
+    shutil.move(file_path, os.path.join(done_folder, csv_file))

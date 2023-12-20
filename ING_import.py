@@ -3,6 +3,7 @@ import re
 import pandas as pd
 import shutil
 from sqlalchemy import create_engine
+from sqlalchemy.types import String, Numeric, DateTime
 
 
 def create_folder_if_not_exist(folder_path):
@@ -11,8 +12,9 @@ def create_folder_if_not_exist(folder_path):
 
 
 # Directory containing the CSV files
-todo_folder = os.path.join(os.getcwd(), "todo")
-done_folder = os.path.join(os.getcwd(), "done")
+base_folder = "Q:/ING_import"
+todo_folder = os.path.join(base_folder, "todo")
+done_folder = os.path.join(base_folder, "done")
 
 # Create folders if they don't exist
 create_folder_if_not_exist(todo_folder)
@@ -73,9 +75,22 @@ for csv_file in csv_files:
     # Drop the 'Mededeling begunstigde' column
     final_df.drop(columns=['Mededeling begunstigde'], inplace=True)
 
+    print(final_df)
+
     # Export the DataFrame to SQL
-    table_name = 'ING_import'  # Set your table name
-    final_df.to_sql(table_name, con=engine, if_exists='append', index=False)
+    table_name = 'db_ING_import'  # Set your table name
+    column_types = {
+        'Boekdatum': DateTime(),
+        'Account': String(),
+        'IBAN': String(),
+        'Bedrag': Numeric(),
+        'Valuta': String(),
+        'Wederpartij': String(),
+        'Rekening wederpartij': String(),
+        'ING_ID': String()
+    }
+
+    final_df.to_sql(table_name, con=engine, if_exists='append', index=False, dtype=column_types)
 
     # Move the processed CSV file to the 'done' folder
-    shutil.move(file_path, os.path.join(done_folder, csv_file))
+    # shutil.move(file_path, os.path.join(done_folder, csv_file))

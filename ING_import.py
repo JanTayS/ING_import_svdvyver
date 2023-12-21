@@ -2,7 +2,7 @@ import os
 import re
 import pandas as pd
 import shutil
-from sqlalchemy import create_engine
+from sqlalchemy import create_engine, text
 from sqlalchemy.types import String, Numeric, DateTime
 
 
@@ -12,7 +12,7 @@ def create_folder_if_not_exist(folder_path):
 
 
 # Directory containing the CSV files
-base_folder = "Q:/ING_import"
+base_folder = "//196.147.195.1/administratie/Import_ING"
 todo_folder = os.path.join(base_folder, "todo")
 done_folder = os.path.join(base_folder, "done")
 
@@ -35,7 +35,9 @@ password = 'BuurMan$322'
 
 # Create a database engine
 # For pyodbc
-engine = create_engine(f'mssql+pyodbc://{username}:{password}@{server}/{database}?driver=SQL+Server')
+engine = create_engine(
+    'mssql+pyodbc://dbuser:BuurMan$322@196.147.195.12/Financial?driver=ODBC+Driver+17+for+SQL+Server')
+
 # For pymssql
 # engine = create_engine(f'mssql+pymssql://{username}:{password}@{server}/{database}')
 
@@ -65,8 +67,11 @@ for csv_file in csv_files:
     # Create an empty DataFrame to store the final results
     final_df = pd.DataFrame()
 
+    counter = 0
     # Search for occurrences of each ID and keep those rows
     for id in ing_id_rows['ING_ID'].unique():
+        print(f"row: {counter} of {len(ing_id_rows['ING_ID'])}")
+        counter += 1
         id_mask = df.apply(lambda row: row.astype(str).str.contains(id).any(), axis=1)
         id_rows = df[id_mask].copy()  # Use copy to create a separate DataFrame
         id_rows.loc[:, 'ING_ID'] = id  # Add the ID as a new column using .loc
@@ -75,7 +80,27 @@ for csv_file in csv_files:
     # Drop the 'Mededeling begunstigde' column
     final_df.drop(columns=['Mededeling begunstigde'], inplace=True)
 
-    print(final_df)
+    # Find unique ING_IDs
+    unique_ids = final_df['ING_ID'].dropna().unique()
+
+    # Dictionary to hold the first non-null Wederpartij for each ING_ID
+    wederpartij_for_id = {}
+
+    # Iterate over each unique ID to find the first non-null 'Wederpartij'
+    for ing_id in unique_ids:
+        wederpartij_value = final_df[final_df['ING_ID'] == ing_id]['Wederpartij'].dropna().iloc[0] if not \
+        final_df[final_df['ING_ID'] == ing_id]['Wederpartij'].dropna().empty else None
+        wederpartij_for_id[ing_id] = wederpartij_value
+
+    # Update the 'Wederpartij' for each row based on the ING_ID
+    for ing_id, wederpartij_value in wederpartij_for_id.items():
+        if wederpartij_value:
+            final_df.loc[final_df['ING_ID'] == ing_id, 'Wederpartij'] = wederpartij_value
+
+    # Update the 'Wederpartij' for each row based on the ING_ID
+    final_df['Bedrag'] = final_df['Bedrag'].replace(',', '.', regex=True).astype(float)
+    final_df['Boekdatum'] = pd.to_datetime(final_df['Boekdatum'], format='%d-%m-%Y').dt.strftime('%Y-%m-%d')
+    final_df['Bedrag'] = pd.to_numeric(final_df['Bedrag'], errors='coerce')
 
     # Export the DataFrame to SQL
     table_name = 'db_ING_import'  # Set your table name
@@ -83,7 +108,7 @@ for csv_file in csv_files:
         'Boekdatum': DateTime(),
         'Account': String(),
         'IBAN': String(),
-        'Bedrag': Numeric(),
+        'Bedrag': Numeric(18, 2),
         'Valuta': String(),
         'Wederpartij': String(),
         'Rekening wederpartij': String(),
@@ -93,4 +118,4 @@ for csv_file in csv_files:
     final_df.to_sql(table_name, con=engine, if_exists='append', index=False, dtype=column_types)
 
     # Move the processed CSV file to the 'done' folder
-    # shutil.move(file_path, os.path.join(done_folder, csv_file))
+    shutil.move(file_path, os.path.join(done_folder, csv_file))
